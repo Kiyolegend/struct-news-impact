@@ -356,7 +356,7 @@ def impact_symbol():
         return jsonify({"error": "Missing required query param: pair"}), 400
     if pair not in pair_mapper.ACTIVE_PAIRS:
         return jsonify({"error": f"Unknown pair: {pair}", "known": sorted(pair_mapper.ACTIVE_PAIRS)}), 400
-        at_ts = request.args.get("at", type=float)
+    at_ts = request.args.get("at", type=float)
     return jsonify(impact_scorer.get_pair_impact(pair, at_ts=at_ts))
 
 
