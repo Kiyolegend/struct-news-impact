@@ -177,7 +177,7 @@ def _build_pair_result(pair: str, events: list, now: datetime,
     }
 
 
-def get_pair_impact(pair: str) -> dict:
+def get_pair_impact(pair: str, at_ts: float | None = None) -> dict:
     """
     Compute the current impact assessment for a single currency pair.
 
@@ -191,7 +191,7 @@ def get_pair_impact(pair: str) -> dict:
       upcoming_events   -- list of events coming up in the next 4 hours (not yet active)
       source            -- "live" or "stale" depending on cache freshness
     """
-    now    = datetime.now(timezone.utc)
+    now    = (datetime.fromtimestamp(at_ts, tz=timezone.utc) if at_ts else datetime.now(timezone.utc))
     events = calendar_fetcher.get_events()
     status = calendar_fetcher.get_status()
     data_source = "stale" if status.get("last_error") else "live"

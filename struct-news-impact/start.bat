@@ -31,7 +31,9 @@ echo  Open that address in your browser to see the live dashboard.
 echo  Keep this window open while trading.  Press Ctrl+C to stop.
 echo.
 
+start /b cmd /c "timeout /t 3 /nobreak > nul && start http://localhost:5003"
 venv\Scripts\python news_impact_server.py
+
 
 echo.
 echo  [STOPPED] The service has stopped.
