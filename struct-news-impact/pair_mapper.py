@@ -115,6 +115,13 @@ EVENT_NAME_SCORES: list[tuple[str, int]] = [
     ("testimony",               3),
     ("remarks",                 3),
     ("press conference",        3),
+    ("bank of japan rate",      10),
+    ("boj rate",                10),
+    ("bank of japan",            9),
+    ("boj",                      9),
+    ("tokyo cpi",                8),
+    ("tankan",                   8),
+    ("boj press conference",     8),
 
     # ── Tier 2 — very minor ───────────────────────────────────────────────────
     ("auction",                 2),

@@ -120,7 +120,7 @@ def get_events(force_refresh: bool = False) -> list:
     with _lock:
         age         = time.time() - _last_refresh
         cache_empty = len(_cache) == 0
-        needs_sync  = force_refresh or cache_empty or age >= REFRESH_SECS
+        needs_sync  = force_refresh or cache_empty
 
     if needs_sync:
         _do_refresh()   # outside the lock -- safe, atomic swap internally
