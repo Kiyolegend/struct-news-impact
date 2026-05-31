@@ -16,11 +16,11 @@ COUNTRY_PAIR_MAP: dict[str, list[str]] = {
     "FR":  ["EUR/USD"],
     "IT":  ["EUR/USD"],
     "ES":  ["EUR/USD"],
+    "EA":  ["EUR/USD"],        
     "JP":  ["USD/JPY"],
     "AU":  ["AUD/USD"],
     "CA":  ["USD/CAD"],
     "CH":  ["USD/CHF"],
-    "NZ":  ["AUD/USD"],
     "CN":  ["AUD/USD", "USD/JPY"],
 }
 
@@ -109,21 +109,25 @@ EVENT_NAME_SCORES: list[tuple[str, int]] = [
     ("chicago pmi",             4),
     ("dallas fed",              4),
 
+    # ── BOJ / Japan — must come BEFORE generic "speech"/"press conference"
+    # entries so that "BOJ Governor Speech" scores 9, not 3, and
+    # "BOJ Press Conference" scores 8, not 3.
+    ("bank of japan rate",      10),
+    ("boj rate",                10),
+    ("boj press conference",     8),
+    ("tokyo cpi",                8),
+    ("tankan",                   8),
+    ("bank of japan",            9),
+    ("boj",                      9),
+    
     # ── Tier 3 — minor ───────────────────────────────────────────────────────
     ("speech",                  3),
     ("speaks",                  3),
     ("testimony",               3),
     ("remarks",                 3),
     ("press conference",        3),
-    ("bank of japan rate",      10),
-    ("boj rate",                10),
-    ("bank of japan",            9),
-    ("boj",                      9),
-    ("tokyo cpi",                8),
-    ("tankan",                   8),
-    ("boj press conference",     8),
-
-    # ── Tier 2 — very minor ───────────────────────────────────────────────────
+    
+    # ── Tier 2 — very minor 
     ("auction",                 2),
     ("t-bill",                  2),
     ("bond",                    2),
@@ -250,7 +254,9 @@ def get_surprise_level(actual, estimate) -> tuple[str, int, int]:
     if actual_f is None or estimate_f is None:
         return "none", 0, 0
 
-    denominator  = abs(estimate_f) if estimate_f != 0 else 1.0
+    if abs(estimate_f) < 0.1 and abs(actual_f) < 0.1:
+        return "none", 0, 0
+    denominator  = abs(estimate_f) if abs(estimate_f) > 0.001 else 1.0
     relative_dev = abs(actual_f - estimate_f) / denominator
 
     for threshold, level, extra_mins, boost in SURPRISE_THRESHOLDS:

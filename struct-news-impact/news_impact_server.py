@@ -365,7 +365,7 @@ def impact_upcoming():
     """Upcoming events for the next N hours affecting at least one active pair."""
     try:
         hours = int(request.args.get("hours", 24))
-        hours = max(1, min(hours, 72))
+        hours = max(1, min(hours, 168))
     except (ValueError, TypeError):
         hours = 24
     events = impact_scorer.get_upcoming_calendar(hours=hours)

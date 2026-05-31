@@ -19,7 +19,7 @@ from typing import Optional
 
 FINNHUB_BASE    = "https://finnhub.io/api/v1"
 REFRESH_SECS    = 3600          # refresh every 60 minutes
-FETCH_DAYS_FWD  = 3             # fetch today + next 2 days
+FETCH_DAYS_FWD  = 7            # fetch today + next 2 days
 REQUEST_TIMEOUT = 10            # seconds per FinnHub request
 
 _lock          = threading.Lock()
