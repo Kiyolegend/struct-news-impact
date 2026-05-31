@@ -254,7 +254,7 @@ def get_surprise_level(actual, estimate) -> tuple[str, int, int]:
     if actual_f is None or estimate_f is None:
         return "none", 0, 0
 
-    if abs(estimate_f) < 0.1 and abs(actual_f) < 0.1:
+    if abs(estimate_f) < 0.5 and abs(actual_f) < 0.5:
         return "none", 0, 0
     denominator  = abs(estimate_f) if abs(estimate_f) > 0.001 else 1.0
     relative_dev = abs(actual_f - estimate_f) / denominator
