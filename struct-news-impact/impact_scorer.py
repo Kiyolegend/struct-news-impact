@@ -198,7 +198,7 @@ def get_pair_impact(pair: str, at_ts: float | None = None) -> dict:
     return _build_pair_result(pair, events, now, data_source)
 
 
-def get_all_pairs_impact() -> dict:
+def get_all_pairs_impact(at_ts: float | None = None) -> dict:
     """
     Compute the current impact assessment for all active pairs at once.
     Fetches the cache ONCE and reuses it for all pairs -- more efficient
@@ -215,7 +215,7 @@ def get_all_pairs_impact() -> dict:
     }
 
 
-def get_upcoming_calendar(hours: int = 24) -> list:
+def get_upcoming_calendar(hours: int = 24, at_ts: float | None = None) -> list:
     """
     Return all upcoming events (across all active pairs) within the next N hours,
     deduplicated by event name + time, sorted by scheduled time then impact.

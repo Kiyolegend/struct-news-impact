@@ -33,13 +33,13 @@ SERVICE_TIMEOUT = 2          # seconds — fast timeout so the engine never stal
 _SERVICE_WARN_PRINTED = False  # suppress repeated connection error spam
 
 
-def _get_pair_impact(pair: str) -> dict | None:
+def _get_pair_impact(pair: str, at_ts: float | None = None) -> dict | None:
     """Call the live impact service for one pair. Returns None on any error."""
     global _SERVICE_WARN_PRINTED
     try:
         r = requests.get(
             f"{NEWS_IMPACT_URL}/api/impact/symbol",
-            params={"pair": pair},
+            params={"pair": pair, **({"at": int(at_ts)} if at_ts else {})},
             timeout=SERVICE_TIMEOUT,
         )
         r.raise_for_status()
