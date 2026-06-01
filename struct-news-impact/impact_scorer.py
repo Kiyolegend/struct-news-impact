@@ -204,7 +204,7 @@ def get_all_pairs_impact() -> dict:
     Fetches the cache ONCE and reuses it for all pairs -- more efficient
     than calling get_pair_impact() five times separately.
     """
-    now    = datetime.now(timezone.utc)
+    now    = datetime.fromtimestamp(at_ts, tz=timezone.utc) if at_ts else datetime.now(timezone.utc)
     events = calendar_fetcher.get_events()   # single cache fetch
     status = calendar_fetcher.get_status()
     data_source = "stale" if status.get("last_error") else "live"
@@ -220,7 +220,7 @@ def get_upcoming_calendar(hours: int = 24) -> list:
     Return all upcoming events (across all active pairs) within the next N hours,
     deduplicated by event name + time, sorted by scheduled time then impact.
     """
-    now    = datetime.now(timezone.utc)
+    now    = datetime.fromtimestamp(at_ts, tz=timezone.utc) if at_ts else datetime.now(timezone.utc)
     cutoff = now + timedelta(hours=hours)
     events = calendar_fetcher.get_events()
 

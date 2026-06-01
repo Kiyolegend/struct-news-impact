@@ -109,8 +109,8 @@ def _in_daily_window(now: datetime) -> tuple[bool, str]:
     return False, ""
 
 
-def _static_global_blocked() -> tuple[bool, str]:
-    now = datetime.now(timezone.utc)
+def _static_global_blocked(at_ts=None) -> tuple[bool, str]:
+    now = datetime.fromtimestamp(at_ts, tz=timezone.utc) if at_ts else datetime.now(timezone.utc)
     key = (now.year, now.month, now.day)
     if _is_first_friday(now):
         return True, "NFP Friday — US Non-Farm Payrolls — no trading all day"
@@ -122,8 +122,8 @@ def _static_global_blocked() -> tuple[bool, str]:
     return False, ""
 
 
-def _static_symbol_blocked(symbol: str) -> tuple[bool, str]:
-    now = datetime.now(timezone.utc)
+def _static_symbol_blocked(symbol: str, at_ts=None) -> tuple[bool, str]:
+    now = datetime.fromtimestamp(at_ts, tz=timezone.utc) if at_ts else datetime.now(timezone.utc)
     key = (now.year, now.month, now.day)
     if key in BOE_DATES and symbol in GBP_PAIRS:
         return True, f"BoE MPC decision day — {symbol} blocked"
@@ -134,7 +134,7 @@ def _static_symbol_blocked(symbol: str) -> tuple[bool, str]:
 
 # ── Public API (same interface as news_filter.py) ─────────────────────────────
 
-def is_global_blocked() -> tuple[bool, str]:
+def is_global_blocked(at_ts=None) -> tuple[bool, str]:
     """
     Check if ALL pairs should be blocked right now.
 
@@ -146,7 +146,7 @@ def is_global_blocked() -> tuple[bool, str]:
     # First, always check the static calendar for absolute certainty
     # on the highest-stakes events (NFP day, Fed day) — these never
     # require a live service call to verify.
-    static_blocked, static_reason = _static_global_blocked()
+    static_blocked, static_reason = _static_global_blocked(at_ts=at_ts)
 
     # Query live service for USD/JPY as a global US-event proxy
     live_data = _get_pair_impact("USD/JPY")
@@ -166,7 +166,7 @@ def is_global_blocked() -> tuple[bool, str]:
     return static_blocked, (f"[STATIC] {static_reason}" if static_blocked else "")
 
 
-def is_symbol_blocked(symbol: str) -> tuple[bool, str]:
+def is_symbol_blocked(symbol: str, at_ts=None) -> tuple[bool, str]:
     """
     Check if a specific pair should be blocked right now.
 
@@ -185,7 +185,7 @@ def is_symbol_blocked(symbol: str) -> tuple[bool, str]:
         return False, ""
 
     # Live service unreachable — fall back to static
-    return _static_symbol_blocked(symbol)
+    return _static_symbol_blocked(symbol, at_ts=at_ts)
 
 
 def get_pair_confidence_penalty(symbol: str) -> int:
