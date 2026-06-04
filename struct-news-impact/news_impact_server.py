@@ -344,9 +344,8 @@ def health():
 
 @app.route("/api/impact/now", methods=["GET"])
 def impact_now():
-    """Current impact for all active pairs. Cache fetched once for all 5 pairs."""
-    return jsonify(impact_scorer.get_all_pairs_impact())
-
+   at_ts = request.args.get("at", type=float) 
+   return jsonify(impact_scorer.get_all_pairs_impact(at_ts=at_ts)) 
 
 @app.route("/api/impact/symbol", methods=["GET"])
 def impact_symbol():
