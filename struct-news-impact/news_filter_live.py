@@ -134,7 +134,7 @@ def _static_symbol_blocked(symbol: str, at_ts=None) -> tuple[bool, str]:
 
 # ── Public API (same interface as news_filter.py) ─────────────────────────────
 
-def is_global_blocked(at_ts=None) -> tuple[bool, str]:
+def is_global_blocked(reference_ts=None) -> tuple[bool, str]:
     """
     Check if ALL pairs should be blocked right now.
 
@@ -146,7 +146,7 @@ def is_global_blocked(at_ts=None) -> tuple[bool, str]:
     # First, always check the static calendar for absolute certainty
     # on the highest-stakes events (NFP day, Fed day) — these never
     # require a live service call to verify.
-    static_blocked, static_reason = _static_global_blocked(at_ts=at_ts)
+    static_blocked, static_reason = _static_global_blocked(at_ts=reference_ts)
 
     # Query live service for USD/JPY as a global US-event proxy
     live_data = _get_pair_impact("USD/JPY")
@@ -166,7 +166,7 @@ def is_global_blocked(at_ts=None) -> tuple[bool, str]:
     return static_blocked, (f"[STATIC] {static_reason}" if static_blocked else "")
 
 
-def is_symbol_blocked(symbol: str, at_ts=None) -> tuple[bool, str]:
+def is_symbol_blocked(symbol: str, reference_ts=None) -> tuple[bool, str]:
     """
     Check if a specific pair should be blocked right now.
 
@@ -185,10 +185,10 @@ def is_symbol_blocked(symbol: str, at_ts=None) -> tuple[bool, str]:
         return False, ""
 
     # Live service unreachable — fall back to static
-    return _static_symbol_blocked(symbol, at_ts=at_ts)
+    return _static_symbol_blocked(symbol, at_ts=reference_ts)
 
 
-def get_pair_confidence_penalty(symbol: str) -> int:
+def get_pair_confidence_penalty(symbol: str,reference_ts=None) -> int:
     """
     NEW function (not in original news_filter.py).
 
@@ -209,7 +209,7 @@ def get_pair_confidence_penalty(symbol: str) -> int:
     return 0
 
 
-def is_safe_to_trade(symbol: str = "") -> tuple[bool, str]:
+def is_safe_to_trade(symbol: str = "", reference_ts=None) -> tuple[bool, str]:
     """Legacy convenience entry point — kept for backward compatibility."""
     blocked, reason = is_global_blocked()
     if blocked:
