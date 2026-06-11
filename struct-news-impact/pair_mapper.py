@@ -1,140 +1,143 @@
 """
 Pair Mapper — maps economic events to affected currency pairs and impact multipliers.
 
-Each event is associated with a country code. This module maps country codes
+Each event is associated with a currency code. This module maps currency codes
 to the currency pairs they affect, and applies event-name-based multipliers
-to fine-tune the raw FinnHub impact level.
+to fine-tune the impact level.
 """
 
-# ── Which pairs each country's events primarily affect ────────────────────────
+# ── Which pairs each currency's events primarily affect ───────────────────────
+# Keys are ForexFactory currency codes (USD, GBP, EUR, JPY, AUD, CAD, CHF, CNH).
 # Ordered by impact strength (most affected first).
 COUNTRY_PAIR_MAP: dict[str, list[str]] = {
-    "US":  ["USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF", "USD/CAD"],
-    "GB":  ["GBP/USD"],
-    "EU":  ["EUR/USD"],
-    "DE":  ["EUR/USD"],
-    "FR":  ["EUR/USD"],
-    "IT":  ["EUR/USD"],
-    "ES":  ["EUR/USD"],
-    "EA":  ["EUR/USD"],        
-    "JP":  ["USD/JPY"],
-    "AU":  ["AUD/USD"],
-    "CA":  ["USD/CAD"],
-    "CH":  ["USD/CHF"],
-    "CN":  ["AUD/USD", "USD/JPY"],
+    "USD": ["USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF", "USD/CAD"],
+    "GBP": ["GBP/USD"],
+    "EUR": ["EUR/USD"],
+    "JPY": ["USD/JPY"],
+    "AUD": ["AUD/USD"],
+    "CAD": ["USD/CAD"],
+    "CHF": ["USD/CHF"],
+    "CNH": ["AUD/USD", "USD/JPY"],
+    "CNY": ["AUD/USD", "USD/JPY"],
 }
 
 # ── Pairs the scalping engine actively trades ─────────────────────────────────
 ACTIVE_PAIRS = {"USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF"}
 
 # ── Event name keywords → base impact score override (1–10) ──────────────────
-# FinnHub's "high/medium/low" labels are coarse. Known high-impact event names
-# get a more precise score so the engine can calibrate correctly.
+# ForexFactory's "high/medium/low" labels are coarse. Known high-impact event
+# names get a more precise score so the engine can calibrate correctly.
 # Keys are lowercase substrings matched against the event name.
+# ORDER MATTERS: first match wins — more specific entries must come before
+# generic ones (e.g. "boj press conference" before "press conference").
 EVENT_NAME_SCORES: list[tuple[str, int]] = [
     # ── Tier 10 — market-stopping events ──────────────────────────────────────
-    ("non-farm payroll",       10),
-    ("nfp",                    10),
-    ("fed rate decision",      10),
-    ("fomc rate",              10),
-    ("fomc decision",          10),
-    ("federal funds rate",     10),
-    ("interest rate decision", 10),
-    ("boe rate",               10),
-    ("bank of england rate",   10),
-    ("ecb rate",               10),
-    ("ecb deposit",            10),
+    ("non-farm employment",       10),   # ForexFactory: "Non-Farm Employment Change" (NFP)
+    ("non-farm payroll",          10),   # alternate name used by some sources
+    ("nfp",                       10),
+    ("fomc statement",            10),   # ForexFactory: "FOMC Statement"
+    ("fomc rate",                 10),
+    ("fomc decision",             10),
+    ("federal funds rate",        10),
+    ("interest rate decision",    10),
+    ("monetary policy statement", 10),   # ForexFactory: "Monetary Policy Statement" (ECB/BOJ)
+    ("refinancing rate",          10),   # ForexFactory: "Main Refinancing Rate" (ECB)
+    ("official bank rate",        10),   # ForexFactory: "MPC Official Bank Rate Votes" (BOE)
+    ("boe rate",                  10),
+    ("bank of england rate",      10),
+    ("ecb rate",                  10),
+    ("ecb deposit",               10),
 
     # ── Tier 9 — top-tier data ─────────────────────────────────────────────────
-    ("cpi",                     9),
-    ("consumer price index",    9),
-    ("core cpi",                9),
-    ("pce",                     9),
-    ("core pce",                9),
-    ("gdp",                     9),
-    ("gross domestic product",  9),
-    ("nonfarm",                 9),
-    ("unemployment rate",       9),
+    ("cpi",                        9),
+    ("consumer price index",       9),
+    ("core cpi",                   9),
+    ("pce",                        9),
+    ("core pce",                   9),
+    ("gdp",                        9),
+    ("gross domestic product",     9),
+    ("nonfarm",                    9),
+    ("unemployment rate",          9),
 
     # ── Tier 8 — high impact data ─────────────────────────────────────────────
-    ("retail sales",            8),
-    ("trade balance",           8),
-    ("ppi",                     8),
-    ("producer price",          8),
-    ("employment change",       8),
-    ("jobs",                    8),
-    ("ism manufacturing",       8),
-    ("ism services",            8),
-    ("ism non-manufacturing",   8),
+    ("retail sales",               8),
+    ("trade balance",              8),
+    ("ppi",                        8),
+    ("producer price",             8),
+    ("employment change",          8),
+    ("jobs",                       8),
+    ("ism manufacturing",          8),
+    ("ism services",               8),
+    ("ism non-manufacturing",      8),
 
     # ── Tier 7 — notable releases ─────────────────────────────────────────────
-    ("manufacturing pmi",       7),
-    ("services pmi",            7),
-    ("composite pmi",           7),
-    ("industrial production",   7),
-    ("housing starts",          7),
-    ("building permits",        7),
-    ("durable goods",           7),
-    ("consumer confidence",     7),
-    ("jolts",                   7),
-    ("adp",                     7),
-    ("adp employment",          7),
+    ("manufacturing pmi",          7),
+    ("services pmi",               7),
+    ("composite pmi",              7),
+    ("industrial production",      7),
+    ("housing starts",             7),
+    ("building permits",           7),
+    ("durable goods",              7),
+    ("consumer confidence",        7),
+    ("jolts",                      7),
+    ("adp",                        7),
+    ("adp employment",             7),
 
     # ── Tier 6 — medium-high ──────────────────────────────────────────────────
-    ("jobless claims",          6),
-    ("initial claims",          6),
-    ("continuing claims",       6),
-    ("existing home sales",     6),
-    ("new home sales",          6),
-    ("pending home sales",      6),
-    ("michigan sentiment",      6),
-    ("university of michigan",  6),
-    ("business confidence",     6),
+    ("jobless claims",             6),
+    ("initial claims",             6),
+    ("continuing claims",          6),
+    ("existing home sales",        6),
+    ("new home sales",             6),
+    ("pending home sales",         6),
+    ("michigan sentiment",         6),
+    ("university of michigan",     6),
+    ("business confidence",        6),
 
     # ── Tier 5 — medium ───────────────────────────────────────────────────────
-    ("factory orders",          5),
-    ("wholesale inventories",   5),
-    ("business inventories",    5),
-    ("personal income",         5),
-    ("personal spending",       5),
-    ("average earnings",        5),
-    ("wage",                    5),
+    ("factory orders",             5),
+    ("wholesale inventories",      5),
+    ("business inventories",       5),
+    ("personal income",            5),
+    ("personal spending",          5),
+    ("average earnings",           5),
+    ("wage",                       5),
 
     # ── Tier 4 — lower medium ─────────────────────────────────────────────────
-    ("pmi flash",               4),
-    ("flash pmi",               4),
-    ("richmond fed",            4),
-    ("philly fed",              4),
-    ("empire state",            4),
-    ("chicago pmi",             4),
-    ("dallas fed",              4),
+    ("pmi flash",                  4),
+    ("flash pmi",                  4),
+    ("richmond fed",               4),
+    ("philly fed",                 4),
+    ("empire state",               4),
+    ("chicago pmi",                4),
+    ("dallas fed",                 4),
 
     # ── BOJ / Japan — must come BEFORE generic "speech"/"press conference"
     # entries so that "BOJ Governor Speech" scores 9, not 3, and
     # "BOJ Press Conference" scores 8, not 3.
-    ("bank of japan rate",      10),
-    ("boj rate",                10),
-    ("boj press conference",     8),
-    ("tokyo cpi",                8),
-    ("tankan",                   8),
-    ("bank of japan",            9),
-    ("boj",                      9),
-    
+    ("bank of japan rate",        10),
+    ("boj rate",                  10),
+    ("boj press conference",       8),
+    ("tokyo cpi",                  8),
+    ("tankan",                     8),
+    ("bank of japan",              9),
+    ("boj",                        9),
+
     # ── Tier 3 — minor ───────────────────────────────────────────────────────
-    ("speech",                  3),
-    ("speaks",                  3),
-    ("testimony",               3),
-    ("remarks",                 3),
-    ("press conference",        3),
-    
-    # ── Tier 2 — very minor 
-    ("auction",                 2),
-    ("t-bill",                  2),
-    ("bond",                    2),
-    ("note",                    2),
+    ("speech",                     3),
+    ("speaks",                     3),
+    ("testimony",                  3),
+    ("remarks",                    3),
+    ("press conference",           3),
+
+    # ── Tier 2 — very minor ───────────────────────────────────────────────────
+    ("auction",                    2),
+    ("t-bill",                     2),
+    ("bond",                       2),
+    ("note",                       2),
 ]
 
-# ── FinnHub impact label → fallback numeric score ────────────────────────────
+# ── Impact label → fallback numeric score ─────────────────────────────────────
 FINNHUB_IMPACT_FALLBACK: dict[str, int] = {
     "high":   8,
     "medium": 5,
@@ -176,8 +179,8 @@ def get_impact_score(event_name: str, finnhub_impact: str) -> int:
     """
     Determine the numeric impact score (1–10) for an event.
 
-    Priority: event name keyword match → FinnHub label fallback.
-    The name match is more precise than FinnHub's coarse labels.
+    Priority: event name keyword match → impact label fallback.
+    The name match is more precise than the coarse High/Medium/Low labels.
     """
     name_lower = (event_name or "").lower()
     for keyword, score in EVENT_NAME_SCORES:
@@ -187,7 +190,7 @@ def get_impact_score(event_name: str, finnhub_impact: str) -> int:
 
 
 def get_affected_pairs(country: str) -> list[str]:
-    """Return the list of active pairs affected by events from the given country."""
+    """Return the list of active pairs affected by events from the given currency."""
     all_pairs = COUNTRY_PAIR_MAP.get((country or "").upper(), [])
     return [p for p in all_pairs if p in ACTIVE_PAIRS]
 
@@ -205,27 +208,16 @@ def get_confidence_penalty(impact_score: int) -> int:
 
 
 # ── Surprise detection ────────────────────────────────────────────────────────
-# When an event has already fired (actual is known), compare it to the estimate.
-# Large deviations extend the post-event block window and boost the impact score.
-#
-# Format: (min_relative_deviation, level_name, extra_post_mins, score_boost)
-# Thresholds are checked largest-first; first match wins.
-
 SURPRISE_THRESHOLDS: list[tuple[float, str, int, int]] = [
-    (1.00, "extreme", 60, 2),   # >100% off estimate → +60 min window, +2 score
-    (0.50, "large",   45, 1),   # 50–100% off        → +45 min window, +1 score
-    (0.25, "notable", 25, 1),   # 25–50% off         → +25 min window, +1 score
-    (0.10, "mild",    10, 0),   # 10–25% off         → +10 min window, no score boost
-    (0.00, "none",     0, 0),   # <10% off            → no change
+    (1.00, "extreme", 60, 2),
+    (0.50, "large",   45, 1),
+    (0.25, "notable", 25, 1),
+    (0.10, "mild",    10, 0),
+    (0.00, "none",     0, 0),
 ]
 
 
 def _parse_numeric(value) -> float | None:
-    """
-    Parse a FinnHub value string to a plain float.
-    Handles percentage signs and K/M/B suffixes by stripping them.
-    FinnHub is internally consistent per-event, so relative comparisons remain valid.
-    """
     if value is None or str(value).strip() == "":
         return None
     s = str(value).strip().replace(",", "")
@@ -241,7 +233,6 @@ def _parse_numeric(value) -> float | None:
 def get_surprise_level(actual, estimate) -> tuple[str, int, int]:
     """
     Determine how much an event's actual print deviated from the consensus estimate.
-    Should only be called after an event fires (actual is not None/empty).
 
     Returns (level, extra_post_mins, score_boost):
       level           — "none" | "mild" | "notable" | "large" | "extreme"
