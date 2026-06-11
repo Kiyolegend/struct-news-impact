@@ -255,7 +255,7 @@ async function fetchAll() {
 
     const errBar = document.getElementById('errorBar');
     if (health.last_error) {
-      errBar.textContent = 'FinnHub error: ' + health.last_error + ' -- running on stale cache';
+      errBar.textContent = 'Calendar error: ' + health.last_error + ' -- running on stale cache';
       errBar.style.display = 'block';
     } else { errBar.style.display = 'none'; }
 
@@ -283,16 +283,7 @@ setInterval(fetchAll, 10000);
 # -- Startup -------------------------------------------------------------------
 
 def _startup():
-    api_key = os.getenv("FINNHUB_API_KEY", "")
-    if not api_key:
-        print("=" * 60)
-        print("  ERROR: FINNHUB_API_KEY not set.")
-        print("  Add it to your .env file:")
-        print("    FINNHUB_API_KEY=your_key_here")
-        print("=" * 60)
-        sys.exit(1)
-
-    calendar_fetcher.init(api_key)   # also starts background refresh thread
+    calendar_fetcher.init()   # ForexFactory requires no API key
 
     print("=" * 60)
     print("  STRUCT.ai News Impact Service")
@@ -302,7 +293,7 @@ def _startup():
     print(f"  Dashboard: http://localhost:{PORT}/")
     print("=" * 60)
 
-    print("  [INIT] Fetching initial calendar from FinnHub...")
+    print("  [INIT] Fetching initial calendar from ForexFactory...")
     calendar_fetcher.get_events(force_refresh=True)
     status = calendar_fetcher.get_status()
     if status["last_error"]:
@@ -374,7 +365,7 @@ def impact_upcoming():
 
 @app.route("/api/impact/refresh", methods=["POST"])
 def force_refresh():
-    """Force an immediate calendar refresh from FinnHub."""
+    """Force an immediate calendar refresh from ForexFactory."""
     print("[CALENDAR] Force refresh requested via API")
     calendar_fetcher.get_events(force_refresh=True)
     status = calendar_fetcher.get_status()

@@ -172,6 +172,7 @@ def _build_pair_result(pair: str, events: list, now: datetime,
         "reason":             reason,
         "active_events":      active_events,
         "upcoming_events":    upcoming_events[:5],
+        "data_loaded":        len(events) > 0,
         "source":             data_source,
         "checked_utc":        now.strftime("%Y-%m-%d %H:%M:%S UTC"),
     }

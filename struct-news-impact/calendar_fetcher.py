@@ -13,8 +13,11 @@ Refresh strategy:
   - Fetches both this week and next week to cover upcoming sessions
   - Thread-safe: the lock is NEVER held during network I/O
     (fetch happens unlocked, then cache is swapped atomically)
-  - On fetch failure: returns the last cached data (stale-ok approach)
+  - On fetch failure: exponential backoff (5 -> 10 -> 20 -> 40 -> 60 min max)
   - On first-call failure: returns empty list with a clear error status
+  - 404 on next-week URL is treated as normal end-of-week (skipped silently)
+  - All elapsed-time calculations use time.monotonic() -- immune to
+    system clock changes, NTP jumps, or a corrupted PC clock
 """
 
 import threading
@@ -24,11 +27,13 @@ from datetime import datetime, timezone
 from typing import Optional
 
 
-FF_THIS_WEEK_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
-FF_NEXT_WEEK_URL = "https://nfs.faireconomy.media/ff_calendar_nextweek.json"
+FF_THIS_WEEK_URL  = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+FF_NEXT_WEEK_URL  = "https://nfs.faireconomy.media/ff_calendar_nextweek.json"
 
-REFRESH_SECS    = 3600          # refresh every 60 minutes
-REQUEST_TIMEOUT = 10            # seconds per request
+REFRESH_SECS       = 3600   # background refresh every 60 minutes
+REQUEST_TIMEOUT    = 10     # seconds per HTTP request
+RETRY_COOLDOWN_MIN = 300    # minimum backoff after a failure: 5 minutes
+RETRY_COOLDOWN_MAX = 3600   # maximum backoff after repeated failures: 60 minutes
 
 # ForexFactory's CDN requires a browser-like User-Agent header.
 _HEADERS = {
@@ -39,10 +44,13 @@ _HEADERS = {
     )
 }
 
-_lock          = threading.Lock()
-_cache: list   = []
-_last_refresh  = 0.0            # unix timestamp of last successful fetch
-_last_error: Optional[str] = None
+_lock                               = threading.Lock()
+_cache: list                        = []
+_last_refresh       = 0.0           # monotonic time of last successful fetch (elapsed-time math)
+_last_refresh_wall  = 0.0           # real UTC timestamp of last successful fetch (display only)
+_last_attempt       = 0.0           # monotonic time of last fetch attempt (success or failure)
+_fail_count: int    = 0             # consecutive failure count -- drives exponential backoff
+_last_error: Optional[str]              = None
 _bg_thread: Optional[threading.Thread] = None
 
 
@@ -108,18 +116,32 @@ def _fetch_ff() -> list:
     """
     Fetch economic calendar events from ForexFactory (this week + next week).
     Returns a list of normalized internal event dicts, or raises on error.
+
+    404 on the next-week URL is treated as normal end-of-week and skipped silently.
+    429 rate-limit responses are re-raised immediately so _do_refresh can back off.
     NOTE: this function does NOT hold any lock -- it is safe to call concurrently.
     """
     events = []
     for url in (FF_THIS_WEEK_URL, FF_NEXT_WEEK_URL):
-        resp = requests.get(url, headers=_HEADERS, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        raw_events = resp.json()
-        if isinstance(raw_events, list):
-            for raw in raw_events:
-                normalized = _normalize_ff_event(raw)
-                if normalized is not None:
-                    events.append(normalized)
+        try:
+            resp = requests.get(url, headers=_HEADERS, timeout=REQUEST_TIMEOUT)
+            if resp.status_code == 404 and url == FF_NEXT_WEEK_URL:
+                # Next-week calendar not yet published -- normal at end of week
+                print(f"[CALENDAR] Next-week URL returned 404 -- skipping (end of week)")
+                continue
+            if resp.status_code == 429:
+                raise requests.HTTPError(
+                    f"429 Too Many Requests for {url}", response=resp
+                )
+            resp.raise_for_status()
+            raw_events = resp.json()
+            if isinstance(raw_events, list):
+                for raw in raw_events:
+                    normalized = _normalize_ff_event(raw)
+                    if normalized is not None:
+                        events.append(normalized)
+        except requests.HTTPError:
+            raise   # let _do_refresh handle it with backoff
     return events
 
 
@@ -127,21 +149,32 @@ def _do_refresh() -> None:
     """
     Fetch new calendar data WITHOUT holding the lock, then atomically
     swap the cache (lock held only for the brief swap, not the network call).
+    Tracks failure count for exponential backoff.
+    Uses time.monotonic() for all timing -- unaffected by PC clock corruption.
     """
-    global _cache, _last_refresh, _last_error
+    global _cache, _last_refresh, _last_refresh_wall, _last_attempt, _last_error, _fail_count
+
+    # Stamp attempt time using monotonic clock (PC clock independent)
+    _last_attempt = time.monotonic()
 
     try:
         events = _fetch_ff()
         with _lock:
-            _cache        = events
-            _last_refresh = time.time()
-            _last_error   = None
+            _cache             = events
+            _last_refresh      = time.monotonic()  # monotonic: elapsed-time math
+            _last_refresh_wall = time.time()        # wall clock: UTC display only
+            _last_error        = None
+            _fail_count        = 0
         print(f"[CALENDAR] Refreshed: {len(events)} events from ForexFactory")
     except Exception as e:
         with _lock:
             _last_error  = str(e)
+            _fail_count += 1
             cached_count = len(_cache)
-        print(f"[CALENDAR] Fetch failed: {e} -- using cached data ({cached_count} events)")
+        print(
+            f"[CALENDAR] Fetch failed (attempt #{_fail_count}): {e} "
+            f"-- using cached data ({cached_count} events)"
+        )
 
 
 def _background_refresh_loop() -> None:
@@ -155,12 +188,28 @@ def get_events(force_refresh: bool = False) -> list:
     """
     Return the current cached event list.
 
-    If force_refresh=True or the cache is empty, fetches synchronously.
-    Otherwise returns the cache immediately.
+    If force_refresh=True or the cache is empty and not in backoff cooldown,
+    fetches synchronously.  During backoff cooldown, returns stale cache (or
+    empty list) immediately -- avoids hammering ForexFactory after failures.
+    All cooldown timing uses time.monotonic() (PC clock independent).
     """
     with _lock:
-        cache_empty = len(_cache) == 0
-        needs_sync  = force_refresh or cache_empty
+        cache_empty  = len(_cache) == 0
+        current_fail = _fail_count
+        last_att     = _last_attempt
+
+    # Compute exponential backoff cooldown using monotonic time
+    if current_fail > 0 and last_att > 0:
+        backoff     = min(
+            RETRY_COOLDOWN_MIN * (2 ** (current_fail - 1)),
+            RETRY_COOLDOWN_MAX,
+        )
+        time_since  = time.monotonic() - last_att
+        in_cooldown = time_since < backoff
+    else:
+        in_cooldown = False
+
+    needs_sync = (force_refresh or cache_empty) and not in_cooldown
 
     if needs_sync:
         _do_refresh()
@@ -172,16 +221,41 @@ def get_events(force_refresh: bool = False) -> list:
 def get_status() -> dict:
     """Return cache health information for the /health endpoint."""
     with _lock:
-        age_secs = int(time.time() - _last_refresh) if _last_refresh > 0 else None
-        return {
-            "events_cached":    len(_cache),
-            "last_refresh_utc": (
-                datetime.fromtimestamp(_last_refresh, tz=timezone.utc)
-                        .strftime("%Y-%m-%d %H:%M:%S UTC")
-                if _last_refresh > 0 else None
-            ),
-            "cache_age_secs":   age_secs,
-            "next_refresh_secs": max(0, REFRESH_SECS - age_secs) if age_secs is not None else 0,
-            "last_error":       _last_error,
-            "api_key_set":      True,   # no API key needed -- ForexFactory is free
-        }
+        snap_last_refresh      = _last_refresh
+        snap_last_refresh_wall = _last_refresh_wall
+        snap_fail_count        = _fail_count
+        snap_last_att          = _last_attempt
+        snap_cache_len         = len(_cache)
+        snap_last_error        = _last_error
+
+    # Use monotonic clock for all elapsed-time math (PC clock independent)
+    age_secs = (
+        int(time.monotonic() - snap_last_refresh)
+        if snap_last_refresh > 0 else None
+    )
+
+    # Next refresh countdown: backoff schedule if failing, normal schedule if healthy
+    if snap_fail_count > 0 and snap_last_att > 0:
+        backoff      = min(
+            RETRY_COOLDOWN_MIN * (2 ** (snap_fail_count - 1)),
+            RETRY_COOLDOWN_MAX,
+        )
+        elapsed      = time.monotonic() - snap_last_att
+        next_refresh = max(0, int(backoff - elapsed))
+    elif age_secs is not None:
+        next_refresh = max(0, REFRESH_SECS - age_secs)
+    else:
+        next_refresh = 0
+
+    return {
+        "events_cached":     snap_cache_len,
+        "last_refresh_utc":  (
+            datetime.fromtimestamp(snap_last_refresh_wall, tz=timezone.utc)
+                    .strftime("%Y-%m-%d %H:%M:%S UTC")
+            if snap_last_refresh_wall > 0 else None
+        ),
+        "cache_age_secs":    age_secs,
+        "next_refresh_secs": next_refresh,
+        "last_error":        snap_last_error,
+        "api_key_set":       True,   # no API key needed -- ForexFactory is free
+    }
