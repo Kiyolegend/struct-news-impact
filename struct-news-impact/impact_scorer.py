@@ -1,5 +1,5 @@
 """
-Impact Scorer -- processes raw FinnHub events into per-pair impact assessments.
+Impact Scorer -- processes raw ForexFactory/Calendar events into per-pair impact assessments.
 
 For each active pair, this module:
   1. Finds all events in the cache that affect that pair
@@ -16,12 +16,12 @@ import pair_mapper
 
 def _parse_event_time(time_str: str) -> Optional[datetime]:
     """
-    Parse an event time string from FinnHub into a UTC-aware datetime.
+    Parse an event time string from ForexFactory/Calendar into a UTC-aware datetime.
 
-    FinnHub returns times in one of these formats:
-      "2026-05-22 17:00:00"         -- space-separated, no tz (treat as UTC)
-      "2026-05-22T13:30:00+00:00"   -- ISO 8601 with tz offset
-      "2026-05-22T13:30:00Z"        -- ISO 8601 with Z suffix
+    ForexFactory returns times in ISO 8601 with a US Eastern timezone offset, e.g.:
+      "2026-06-10T08:30:00-04:00"   -- ISO 8601 with EDT offset (most common)
+      "2026-06-10T08:30:00-05:00"   -- ISO 8601 with EST offset (winter)
+      "2026-06-10T13:30:00+00:00"   -- ISO 8601 with UTC offset
 
     Returns None if the string is empty or cannot be parsed.
     """
@@ -30,8 +30,8 @@ def _parse_event_time(time_str: str) -> Optional[datetime]:
 
     s = str(time_str).strip()
 
-    # Fast path: strip any tz offset or Z suffix and normalise the separator,
-    # then parse as a plain UTC datetime. Covers all common FinnHub formats.
+    # Fast path: strip any UTC offset or Z suffix and normalise the separator,
+    # then parse as a plain UTC datetime. Covers UTC and Z-suffix formats.
     try:
         dt = datetime.strptime(
             s.split("+")[0].rstrip("Z").replace("T", " "),
@@ -41,7 +41,8 @@ def _parse_event_time(time_str: str) -> Optional[datetime]:
     except ValueError:
         pass
 
-    # Fall back to fromisoformat for anything with explicit tz offset
+    # Fall back to fromisoformat for anything with an explicit tz offset
+    # (covers ForexFactory's standard US Eastern offset e.g. -04:00, -05:00)
     try:
         normalised = s.replace("Z", "+00:00")
         dt = datetime.fromisoformat(normalised)
@@ -74,19 +75,19 @@ def _is_window_active(event_time: datetime, impact_score: int, now: datetime,
 
 def _score_event(raw: dict, now: datetime) -> Optional[dict]:
     """
-    Score a single raw FinnHub event dict and return a scored event dict,
+    Score a single raw ForexFactory/Calendar event dict and return a scored event dict,
     or None if the event cannot be parsed or has no time.
     """
-    event_name     = raw.get("event", "Unknown Event")
-    finnhub_impact = raw.get("impact", "low")
-    time_str       = raw.get("time", "")
-    country        = raw.get("country", "")
+    event_name  = raw.get("event", "Unknown Event")
+    ff_impact   = raw.get("impact", "low")
+    time_str    = raw.get("time", "")
+    country     = raw.get("country", "")
 
     event_time = _parse_event_time(time_str)
     if event_time is None:
         return None
 
-    impact_score = pair_mapper.get_impact_score(event_name, finnhub_impact)
+    impact_score = pair_mapper.get_impact_score(event_name, ff_impact)
 
     actual_val   = raw.get("actual")
     estimate_val = raw.get("estimate")
@@ -107,7 +108,7 @@ def _score_event(raw: dict, now: datetime) -> Optional[dict]:
         "base_impact_level": impact_score,
         "surprise_level":    surprise_level,
         "extra_post_mins":   extra_post_mins,
-        "finnhub_impact":    finnhub_impact,
+        "ff_impact":         ff_impact,
         "scheduled_utc":     event_time.strftime("%Y-%m-%d %H:%M UTC"),
         "minutes_away":      minutes_away,
         "window_active":     is_active,
@@ -190,6 +191,7 @@ def get_pair_impact(pair: str, at_ts: float | None = None) -> dict:
       reason            -- human-readable reason string
       active_events     -- list of events whose time windows are currently active
       upcoming_events   -- list of events coming up in the next 4 hours (not yet active)
+      data_loaded       -- False if calendar cache is empty (triggers engine fallback)
       source            -- "live" or "stale" depending on cache freshness
     """
     now    = (datetime.fromtimestamp(at_ts, tz=timezone.utc) if at_ts else datetime.now(timezone.utc))
@@ -235,15 +237,15 @@ def get_upcoming_calendar(hours: int = 24, at_ts: float | None = None) -> list:
         if not affected_pairs:
             continue
 
-        event_name     = raw.get("event", "Unknown Event")
-        finnhub_impact = raw.get("impact", "low")
-        time_str       = raw.get("time", "")
+        event_name  = raw.get("event", "Unknown Event")
+        ff_impact   = raw.get("impact", "low")
+        time_str    = raw.get("time", "")
 
         event_time = _parse_event_time(time_str)
         if event_time is None or event_time < now or event_time > cutoff:
             continue
 
-        impact_score            = pair_mapper.get_impact_score(event_name, finnhub_impact)
+        impact_score            = pair_mapper.get_impact_score(event_name, ff_impact)
         penalty                 = pair_mapper.get_confidence_penalty(impact_score)
         before_mins, after_mins = pair_mapper.get_time_window(impact_score)
 
@@ -258,7 +260,7 @@ def get_upcoming_calendar(hours: int = 24, at_ts: float | None = None) -> list:
             "event":             event_name,
             "country":           country,
             "impact_level":      impact_score,
-            "finnhub_impact":    finnhub_impact,
+            "ff_impact":         ff_impact,
             "scheduled_utc":     event_time.strftime("%Y-%m-%d %H:%M UTC"),
             "minutes_away":      minutes_away,
             "confidence_penalty": penalty,
