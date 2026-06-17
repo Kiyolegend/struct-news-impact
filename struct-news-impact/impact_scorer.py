@@ -274,3 +274,43 @@ def get_upcoming_calendar(hours: int = 24, at_ts: float | None = None) -> list:
 
     results.sort(key=lambda e: (e["minutes_away"], -e["impact_level"]))
     return results
+
+
+
+def get_fomc_window_today(at_ts: float | None = None) -> dict | None:
+    """
+    Search today's cached ForexFactory calendar for a Fed/FOMC rate decision.
+    Returns the actual block window (start/end timestamps) so news_filter_live.py
+    can block only around the real announcement time instead of all day.
+    Returns None if no FOMC event is found in today's calendar.
+    """
+    FED_KEYWORDS = ("fed funds rate", "fomc", "federal funds", "interest rate decision")
+    now    = datetime.fromtimestamp(at_ts, tz=timezone.utc) if at_ts else datetime.now(timezone.utc)
+    today  = now.date()
+    events = calendar_fetcher.get_events()
+
+    for raw in events:
+        if raw.get("country", "").upper() not in ("USD", "US"):
+            continue
+        name = raw.get("event", "").lower()
+        if not any(kw in name for kw in FED_KEYWORDS):
+            continue
+        event_time = _parse_event_time(raw.get("time", ""))
+        if event_time is None or event_time.date() != today:
+            continue
+        impact_score            = pair_mapper.get_impact_score(raw.get("event", ""), raw.get("impact", "high"))
+        before_mins, after_mins = pair_mapper.get_time_window(impact_score)
+        block_start = event_time - timedelta(minutes=before_mins)
+        block_end   = event_time + timedelta(minutes=after_mins)
+        return {
+            "event":           raw.get("event"),
+            "event_utc":       event_time.strftime("%Y-%m-%d %H:%M UTC"),
+            "block_start_utc": block_start.strftime("%Y-%m-%d %H:%M UTC"),
+            "block_end_utc":   block_end.strftime("%Y-%m-%d %H:%M UTC"),
+            "block_start_ts":  block_start.timestamp(),
+            "block_end_ts":    block_end.timestamp(),
+            "before_mins":     before_mins,
+            "after_mins":      after_mins,
+            "impact_level":    impact_score,
+        }
+    return None

@@ -371,6 +371,19 @@ def force_refresh():
     status = calendar_fetcher.get_status()
     return jsonify({"ok": not bool(status["last_error"]), "status": status})
 
+@app.route("/api/impact/fomc-window", methods=["GET"])
+def fomc_window():
+    """
+    Returns today's FOMC/Fed rate decision scheduled time and block window.
+    Called by news_filter_live.py so it can block only the real window, not all day.
+    Returns {"found": false} if no FOMC event is scheduled today.
+    """
+    at_ts  = request.args.get("at", type=float)
+    result = impact_scorer.get_fomc_window_today(at_ts=at_ts)
+    if result is None:
+        return jsonify({"found": False})
+    return jsonify({"found": True, **result})
+
 
 # -- Entry point ---------------------------------------------------------------
 
