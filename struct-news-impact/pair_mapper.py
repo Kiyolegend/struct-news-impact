@@ -10,7 +10,7 @@ to fine-tune the impact level.
 # Keys are ForexFactory currency codes (USD, GBP, EUR, JPY, AUD, CAD, CHF, CNH).
 # Ordered by impact strength (most affected first).
 COUNTRY_PAIR_MAP: dict[str, list[str]] = {
-    "USD": ["USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF", "USD/CAD"],
+    "USD": ["USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF", "USD/CAD", "XAU/USD", "BTC/USD"],
     "GBP": ["GBP/USD"],
     "EUR": ["EUR/USD"],
     "JPY": ["USD/JPY"],
@@ -22,7 +22,7 @@ COUNTRY_PAIR_MAP: dict[str, list[str]] = {
 }
 
 # ── Pairs the scalping engine actively trades ─────────────────────────────────
-ACTIVE_PAIRS = {"USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF"}
+ACTIVE_PAIRS = {"USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF", "XAU/USD", "BTC/USD"}
 
 # ── Event name keywords → base impact score override (1–10) ──────────────────
 # ForexFactory's "high/medium/low" labels are coarse. Known high-impact event
