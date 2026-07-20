@@ -10,19 +10,20 @@ to fine-tune the impact level.
 # Keys are ForexFactory currency codes (USD, GBP, EUR, JPY, AUD, CAD, CHF, CNH).
 # Ordered by impact strength (most affected first).
 COUNTRY_PAIR_MAP: dict[str, list[str]] = {
-    "USD": ["USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF", "USD/CAD", "XAU/USD", "BTC/USD"],
-    "GBP": ["GBP/USD"],
-    "EUR": ["EUR/USD"],
-    "JPY": ["USD/JPY"],
-    "AUD": ["AUD/USD"],
-    "CAD": ["USD/CAD"],
+    "USD": ["USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF", "USD/CAD", "XAU/USD", "BTC/USD", "NZD/USD"],
+    "GBP": ["GBP/USD", "GBP/JPY"],
+    "EUR": ["EUR/USD", "EUR/JPY"],
+    "JPY": ["USD/JPY", "EUR/JPY", "GBP/JPY", "AUD/JPY", "CAD/JPY"],
+    "AUD": ["AUD/USD", "AUD/JPY"],
+    "CAD": ["USD/CAD", "CAD/JPY"],
     "CHF": ["USD/CHF"],
+    "NZD": ["NZD/USD"],
     "CNH": ["AUD/USD", "USD/JPY"],
     "CNY": ["AUD/USD", "USD/JPY"],
 }
 
 # ── Pairs the scalping engine actively trades ─────────────────────────────────
-ACTIVE_PAIRS = {"USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF", "XAU/USD", "BTC/USD"}
+ACTIVE_PAIRS = {"USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF", "XAU/USD", "BTC/USD", "EUR/JPY", "GBP/JPY", "USD/CAD", "NZD/USD", "AUD/JPY", "CAD/JPY"}
 
 # ── Event name keywords → base impact score override (1–10) ──────────────────
 # ForexFactory's "high/medium/low" labels are coarse. Known high-impact event
