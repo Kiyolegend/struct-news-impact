@@ -10,7 +10,7 @@ to fine-tune the impact level.
 # Keys are ForexFactory currency codes (USD, GBP, EUR, JPY, AUD, CAD, CHF, CNH).
 # Ordered by impact strength (most affected first).
 COUNTRY_PAIR_MAP: dict[str, list[str]] = {
-    "USD": ["USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF", "USD/CAD", "XAU/USD", "BTC/USD", "NZD/USD"],
+    "USD": ["USD/JPY", "EUR/USD", "GBP/USD", "AUD/USD", "USD/CHF", "USD/CAD", "XAU/USD", "BTC/USD", "NZD/USD", "EUR/JPY", "GBP/JPY", "AUD/JPY", "CAD/JPY"],
     "GBP": ["GBP/USD", "GBP/JPY"],
     "EUR": ["EUR/USD", "EUR/JPY"],
     "JPY": ["USD/JPY", "EUR/JPY", "GBP/JPY", "AUD/JPY", "CAD/JPY"],

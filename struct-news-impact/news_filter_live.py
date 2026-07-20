@@ -55,8 +55,8 @@ def _get_pair_impact(pair: str, at_ts: float | None = None) -> dict | None:
 # ── Static fallback (from original news_filter.py) ───────────────────────────
 # Keep this in sync with the main news_filter.py if you add new dates there.
 
-GBP_PAIRS = {"GBP/USD"}
-EUR_PAIRS = {"EUR/USD"}
+GBP_PAIRS = {"GBP/USD", "GBP/JPY"}
+EUR_PAIRS = {"EUR/USD", "EUR/JPY"}
 
 DAILY_BLOCKED_WINDOWS = [
     (6,  45,  8, 30, "UK/EU data window (CPI, GDP, PMI, employment)"),
